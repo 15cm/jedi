@@ -2,18 +2,18 @@
 Environments are a way to activate different Python versions or Virtualenvs for
 static analysis. The Python binary in that environment is going to be executed.
 """
+import filecmp
+import hashlib
 import os
 import sys
-import hashlib
-import filecmp
 from collections import namedtuple
 
+import parso
 from jedi._compatibility import highest_pickle_protocol, which
 from jedi.cache import memoize_method, time_cache
-from jedi.evaluate.compiled.subprocess import CompiledSubprocess, \
-    EvaluatorSameProcess, EvaluatorSubprocess
-
-import parso
+from jedi.evaluate.compiled.subprocess import (CompiledSubprocess,
+                                               EvaluatorSameProcess,
+                                               EvaluatorSubprocess)
 
 _VersionInfo = namedtuple('VersionInfo', 'major minor micro')
 
@@ -32,7 +32,8 @@ class InvalidPythonEnvironment(Exception):
 class _BaseEnvironment(object):
     @memoize_method
     def get_grammar(self):
-        version_string = '%s.%s' % (self.version_info.major, self.version_info.minor)
+        version_string = '%s.%s' % (self.version_info.major,
+                                    self.version_info.minor)
         return parso.load_grammar(version=version_string)
 
     @property
@@ -74,9 +75,8 @@ class Environment(_BaseEnvironment):
             info = self._subprocess._send(None, _get_info)
         except Exception as exc:
             raise InvalidPythonEnvironment(
-                "Could not get version information for %r: %r" % (
-                    self._start_executable,
-                    exc))
+                "Could not get version information for %r: %r" %
+                (self._start_executable, exc))
 
         # Since it could change and might not be the same(?) as the one given,
         # set it here.
@@ -100,8 +100,8 @@ class Environment(_BaseEnvironment):
             self.path = self.path.decode()
 
         # Adjust pickle protocol according to host and client version.
-        self._subprocess._pickle_protocol = highest_pickle_protocol([
-            sys.version_info, self.version_info])
+        self._subprocess._pickle_protocol = highest_pickle_protocol(
+            [sys.version_info, self.version_info])
 
         return self._subprocess
 
@@ -251,6 +251,15 @@ def _get_cached_default_environment():
     return get_default_environment()
 
 
+def find_virtualenv(path, safe=True):
+    if os.path.isdir(path):
+        try:
+            executable = _get_executable_path(path, safe=safe)
+            return Environment(executable)
+        except InvalidPythonEnvironment:
+            pass
+
+
 def find_virtualenvs(paths=None, **kwargs):
     """
     :param paths: A list of paths in your file system to be scanned for
@@ -290,11 +299,9 @@ def find_virtualenvs(paths=None, **kwargs):
                     continue
                 _used_paths.add(path)
 
-                try:
-                    executable = _get_executable_path(path, safe=safe)
-                    yield Environment(executable)
-                except InvalidPythonEnvironment:
-                    pass
+                virtual_env = find_virtualenv(path, safe)
+                if virtual_env:
+                    yield virtual_env
 
     return py27_comp(paths, **kwargs)
 
@@ -338,7 +345,8 @@ def get_system_environment(version):
                 return Environment(exe)
             except InvalidPythonEnvironment:
                 pass
-    raise InvalidPythonEnvironment("Cannot find executable python%s." % version)
+    raise InvalidPythonEnvironment("Cannot find executable python%s." %
+                                   version)
 
 
 def create_environment(path, safe=True):
